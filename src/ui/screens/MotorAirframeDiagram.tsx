@@ -35,7 +35,9 @@ import type {
   MotorRotationDirection,
 } from '../../core/state/motorVerificationModel';
 import { MOTOR_TEST_EXPECTED_CONFIGURATION } from '../../core/state/motorVerificationModel';
-import { colors, radii, spacing, typography } from '../theme';
+import { colors, radii, spacing, typography, fonts} from '../theme';
+import { Icon } from '../icons';
+import { isRtlLayout } from '../icons/layoutDirection';
 import { resolveLayoutTier } from '../theme/layout';
 
 export interface MotorAirframeEntry {
@@ -289,20 +291,16 @@ function RotorGlyph({
         <View
           style={[styles.hub, { width: hub, height: hub, borderRadius: hub / 2 }]}
         />
-        <Text
-          style={[
-            styles.rotationArrow,
-            { fontSize: arrowFont, lineHeight: Math.round(arrowFont * 1.1) },
-            active && styles.rotationArrowActive,
-          ]}
-        >
-          {direction === 'CW' ? '↻' : '↺'}
-        </Text>
+        <Icon
+          name={direction === 'CW' ? 'rotate-cw' : 'rotate-ccw'}
+          size={Math.round(arrowFont * 1.05)}
+          color={active ? colors.accentText : colors.textSecondary}
+        />
       </View>
       <Text
         style={[
           styles.directionText,
-          { fontSize: Math.max(9, Math.round(11 * scale)) },
+          { fontSize: Math.max(12, Math.round(12 * scale)) },
         ]}
         testID={`motors-diagram-direction-${direction}`}
       >
@@ -333,7 +331,7 @@ function MotorNode({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const slotFont = Math.max(13, Math.round(18 * scale));
-  const positionFont = Math.max(9, Math.round(11 * scale));
+  const positionFont = Math.max(12, Math.round(12 * scale));
   const badge =
     activity !== undefined
       ? { text: t(activityLabelKey(activity)), color: activityColor(activity) }
@@ -422,8 +420,29 @@ export function MotorAirframeDiagram({
   const scale = stageWidth / 260;
 
   const ordered = orderAirframeEntries(entries);
-  const front = ordered.slice(0, 2);
-  const rear = ordered.slice(2, 4);
+  /**
+   * PHYSICAL PLACEMENT, COMPUTED - not delegated to a style property.
+   *
+   * orderAirframeEntries emits RIGHT-then-LEFT (its own contract, tested,
+   * untouched). A plain flex row paints index 0 at the reading-start
+   * edge: the RIGHT edge under RTL, the LEFT edge under LTR. So the
+   * paint order is simply reversed for LTR, and FRONT_RIGHT lands on the
+   * operator's right either way.
+   *
+   * WHY NOT `direction: 'ltr'` + row-reverse, which this file tried
+   * first: react-native-web SILENTLY DROPS the React Native `direction`
+   * style. Measured in a real browser - the rendered row still computed
+   * `direction: rtl`, row-reverse inverted it, and the aircraft was drawn
+   * MIRRORED (M2 "أمامي يمين" appeared on the left). A style the platform
+   * ignores cannot carry a safety guarantee, and a unit test that asserts
+   * the style OBJECT rather than the rendered box will not catch it.
+   *
+   * This changes no motor data: same entries, same slots, same mapping.
+   */
+  const paintOrder = (pair: readonly MotorAirframeEntry[]) =>
+    isRtlLayout() ? pair : [...pair].reverse();
+  const front = paintOrder(ordered.slice(0, 2));
+  const rear = paintOrder(ordered.slice(2, 4));
 
   const renderNode = (entry: MotorAirframeEntry) => (
     <MotorNode
@@ -444,17 +463,12 @@ export function MotorAirframeDiagram({
       <Text style={styles.diagramTitle}>{t('motorsScreen.diagramTitle')}</Text>
 
       <View style={styles.frontMarker} testID="motors-diagram-front">
-        <Text
-          style={[
-            styles.frontArrow,
-            {
-              fontSize: Math.round(22 * scale),
-              lineHeight: Math.round(24 * scale),
-            },
-          ]}
-        >
-          ▲
-        </Text>
+        <Icon
+          name="chevron-up"
+          size={Math.round(22 * scale)}
+          color={colors.accentStrong}
+          strokeWidth={2.5}
+        />
         <Text
           style={[
             styles.frontText,
@@ -563,10 +577,13 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   frontMarker: { alignItems: 'center', gap: 1 },
-  frontArrow: { color: colors.accentStrong, fontWeight: '900' },
   frontText: {
+    // fontFamily is explicit because the SIZE is applied inline at render
+    // time; spreading a token would be overridden, and omitting the family
+    // dropped this label to the system font (measured in a browser).
+    fontFamily: fonts.family,
     color: colors.accentStrong,
-    fontWeight: '800',
+    fontWeight: '700',
     writingDirection: 'rtl',
   },
   stage: {
@@ -642,7 +659,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '2%',
     right: '2%',
-    flexDirection: 'row-reverse',
+    /**
+     * A plain row. The PHYSICAL placement is decided in the component
+     * (see paintOrder), not by this style: react-native-web drops the
+     * React Native `direction` property, so no style here can pin the
+     * aircraft's left and right.
+     */
+    flexDirection: 'row',
     justifyContent: 'space-between',
   },
   frontRow: { top: '2%' },
@@ -682,25 +705,23 @@ const styles = StyleSheet.create({
     borderColor: colors.background,
     borderWidth: 1,
   },
-  rotationArrow: {
-    position: 'absolute',
-    color: colors.accentStrong,
-    fontWeight: '900',
-  },
-  rotationArrowActive: { color: colors.warning },
   directionText: {
+    /* MONO on purpose: CW/CCW is a technical identifier, not prose. */
     ...typography.mono,
     color: colors.accentStrong,
-    fontWeight: '800',
+    fontWeight: '700',
     writingDirection: 'ltr',
   },
   slot: {
     ...typography.mono,
     color: colors.textPrimary,
-    fontWeight: '900',
+    fontWeight: '700',
     writingDirection: 'ltr',
   },
   position: {
+    // Arabic prose ("أمامي يمين"), sized inline - so the family must be
+    // named here or it falls back to the system font.
+    fontFamily: fonts.family,
     color: colors.textSecondary,
     textAlign: 'center',
     writingDirection: 'rtl',
@@ -711,7 +732,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: colors.background,
   },
-  stateBadgeText: { fontWeight: '800', writingDirection: 'rtl' },
+  stateBadgeText: {
+    fontFamily: fonts.family,
+    fontWeight: '700',
+    writingDirection: 'rtl',
+  },
   caption: {
     ...typography.caption,
     color: colors.textSecondary,

@@ -3,7 +3,6 @@ import {
   Alert,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -24,6 +23,7 @@ import {
   type MotorConfigurationSaveOutcome,
 } from '../../platforms/react-native/protocol/MotorConfigurationController';
 import { colors, radii, spacing, typography } from '../theme';
+import { ToggleSwitch } from '../components/controls';
 import { formatMotorProtocol } from './MotorConfigurationSummary';
 
 const MIN_TOUCH_TARGET = 44;
@@ -205,12 +205,14 @@ function ToggleRow({
         <Text style={styles.settingLabel}>{label}</Text>
         <Text style={styles.caption}>{detail}</Text>
       </View>
-      <Switch
+      {/* The platform Switch drew accentSoft on accent here - pale teal
+          on pale teal, so ON and OFF were nearly indistinguishable on a
+          motor-configuration row. The shared control states it plainly. */}
+      <ToggleSwitch
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
-        trackColor={{ false: colors.disabled, true: colors.accentSoft }}
-        thumbColor={value ? colors.accent : colors.textMuted}
+        accessibilityLabel={label}
       />
     </View>
   );
@@ -824,7 +826,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     writingDirection: 'ltr',
   },
-  protocolTextSelected: { color: colors.accentStrong, fontWeight: '800' },
+  protocolTextSelected: { color: colors.accentStrong, fontWeight: '700' },
   numberGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   numberField: {
     flexGrow: 1,
@@ -858,7 +860,7 @@ const styles = StyleSheet.create({
   smallButtonText: {
     ...typography.caption,
     color: colors.accentStrong,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   primaryButton: {
@@ -873,7 +875,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     ...typography.body,
     color: colors.accentText,
-    fontWeight: '800',
+    fontWeight: '700',
     writingDirection: 'rtl',
   },
   secondaryButton: {

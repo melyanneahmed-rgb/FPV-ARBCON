@@ -27,6 +27,7 @@ import {
   typography,
   useContentEnvelope,
 } from '../theme';
+import {Icon} from '../icons';
 
 export type PresetsRepositoryPort = Pick<
   typeof firmwarePresetRepository,
@@ -428,14 +429,33 @@ export default function PresetsScreen({
                         key={option.name}
                         testID={`preset-option-${option.name}`}
                         onPress={() => toggleOption(option.name)}
+                        accessibilityRole={
+                          option.exclusive ? 'radio' : 'checkbox'
+                        }
+                        accessibilityLabel={option.name}
+                        accessibilityState={{
+                          checked: selectedOptions.has(option.name),
+                          selected: selectedOptions.has(option.name),
+                        }}
+                        aria-checked={selectedOptions.has(option.name)}
                         style={[
                           styles.option,
                           selectedOptions.has(option.name) && styles.optionOn,
                         ]}
                       >
-                        <Text style={styles.optionMark}>
-                          {selectedOptions.has(option.name) ? '✓' : '○'}
-                        </Text>
+                        <Icon
+                          name={
+                            selectedOptions.has(option.name)
+                              ? 'circle-check'
+                              : 'circle'
+                          }
+                          size={20}
+                          color={
+                            selectedOptions.has(option.name)
+                              ? colors.accentStrong
+                              : colors.textMuted
+                          }
+                        />
                         <View style={styles.optionCopy}>
                           <Text style={styles.optionName}>{option.name}</Text>
                           {option.group ? (
@@ -463,7 +483,7 @@ export default function PresetsScreen({
                 >
                   <Text style={styles.primaryText}>
                     {backupReady
-                      ? '✓ نسخة diff all محفوظة'
+                      ? 'نسخة diff all محفوظة'
                       : '1 · أنشئ واحفظ نسخة diff all'}
                   </Text>
                 </Pressable>
@@ -566,11 +586,11 @@ const styles = StyleSheet.create({
   eyebrow: {
     ...typography.caption,
     color: colors.accentStrong,
-    fontWeight: '900',
+    fontWeight: '700',
     writingDirection: 'ltr',
   },
   title: {
-    ...typography.screenTitle,
+    ...typography.title,
     color: colors.textPrimary,
     writingDirection: 'rtl',
   },
@@ -601,8 +621,10 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
   },
   errorText: {
+    // Was weight+colour with no token, so the blocked-session message
+    // rendered in the system fallback font. Measured in a browser.
+    ...typography.bodyStrong,
     color: colors.error,
-    fontWeight: '800',
     writingDirection: 'rtl',
   },
   toolbar: { flexDirection: 'row', gap: spacing.sm },
@@ -624,7 +646,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.accentSoft,
   },
-  reloadText: { color: colors.accentStrong, fontWeight: '800' },
+  reloadText: {...typography.label, color: colors.accentStrong},
   categories: { gap: spacing.xs, paddingVertical: spacing.xs },
   chip: {
     paddingHorizontal: spacing.md,
@@ -635,7 +657,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
   },
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accentStrong },
-  chipText: { color: colors.textPrimary, fontWeight: '800' },
+  chipText: {...typography.label, color: colors.textPrimary},
   workspace: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -681,7 +703,7 @@ const styles = StyleSheet.create({
   presetTitle: {
     ...typography.body,
     color: colors.textPrimary,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   meta: { ...typography.caption, color: colors.textMuted },
   hint: {
@@ -711,7 +733,7 @@ const styles = StyleSheet.create({
   subhead: {
     ...typography.body,
     color: colors.textPrimary,
-    fontWeight: '900',
+    fontWeight: '700',
     writingDirection: 'rtl',
   },
   option: {
@@ -728,19 +750,18 @@ const styles = StyleSheet.create({
     borderColor: colors.accentStrong,
     backgroundColor: colors.accentSoft,
   },
-  optionMark: { fontSize: 22, color: colors.accentStrong },
   optionCopy: { flex: 1 },
   optionName: {
     ...typography.body,
     color: colors.textPrimary,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   commandSummary: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  commandCount: { fontSize: 28, fontWeight: '900', color: colors.accentStrong },
+  commandCount: {...typography.display, color: colors.accentStrong},
   primary: {
     minHeight: 48,
     alignItems: 'center',
@@ -750,7 +771,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentStrong,
   },
-  primaryText: { color: colors.accentStrong, fontWeight: '900' },
+  primaryText: {...typography.label, color: colors.accentStrong},
   apply: {
     minHeight: 50,
     alignItems: 'center',
@@ -758,7 +779,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.accent,
   },
-  applyText: { color: colors.textPrimary, fontWeight: '900' },
+  applyText: {...typography.label, color: colors.textPrimary},
   disabled: { opacity: 0.4 },
   progress: {
     height: 28,
@@ -777,7 +798,7 @@ const styles = StyleSheet.create({
   progressText: {
     textAlign: 'center',
     color: colors.textPrimary,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   decision: {
     padding: spacing.lg,
@@ -807,7 +828,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.error,
   },
-  cancelText: { color: colors.error, fontWeight: '900' },
+  cancelText: { color: colors.error, fontWeight: '700' },
   save: {
     flex: 1,
     minHeight: 48,
@@ -816,15 +837,15 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.accent,
   },
-  saveText: { color: colors.textPrimary, fontWeight: '900' },
+  saveText: { color: colors.textPrimary, fontWeight: '700' },
   status: {
     padding: spacing.md,
     borderRadius: radii.md,
     backgroundColor: colors.accentSoft,
   },
   statusText: {
+    ...typography.label,
     color: colors.accentText,
-    fontWeight: '800',
     textAlign: 'center',
     writingDirection: 'rtl',
   },

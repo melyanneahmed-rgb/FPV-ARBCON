@@ -18,7 +18,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -54,8 +53,19 @@ import {
 } from '../../platforms/react-native/protocol';
 import { colors, radii, spacing, typography, useContentEnvelope } from '../theme';
 import { StickyActionBar } from '../components/editing';
+import {
+  Button,
+  ChoiceChips,
+  MIN_TOUCH_TARGET,
+  NoticeBox,
+  ToggleSwitch,
+} from '../components/controls';
+import { readInteraction } from '../components/controls/interaction';
+import { Icon } from '../icons';
 
-const MIN_TOUCH_TARGET = 44;
+/** The synthetic key for "no role in this category" inside ChoiceChips,
+ * which selects by string key. Never leaves this module. */
+const NONE_ROLE_KEY = '__NONE__';
 const TELEMETRY_ROLES = SERIAL_ROLE_DEFINITIONS.filter(
   role => role.category === 'TELEMETRY',
 );
@@ -143,15 +153,11 @@ function RoleSwitch({
   return (
     <View style={[styles.switchRow, disabled && styles.disabled]}>
       <Text style={styles.controlLabel}>{label}</Text>
-      <Switch
+      <ToggleSwitch
         value={value}
         disabled={disabled}
         onValueChange={onChange}
         accessibilityLabel={label}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: value, disabled }}
-        trackColor={{ false: colors.disabled, true: colors.accentStrong }}
-        thumbColor={value ? colors.accent : colors.textSecondary}
         testID={testID}
       />
     </View>
@@ -183,68 +189,34 @@ function ChoiceGroup({
   return (
     <View style={styles.controlGroup}>
       <Text style={styles.groupLabel}>{title}</Text>
-      <View style={styles.chipWrap}>
-        <Pressable
-          disabled={disabled}
-          onPress={() => onSelect(undefined)}
-          accessibilityLabel={`${title}: ${t('portsConfiguration.none')}`}
-          accessibilityRole="radio"
-          accessibilityState={{
-            selected: selected === undefined,
-            disabled,
-          }}
-          style={[
-            styles.chip,
-            selected === undefined && styles.chipSelected,
-            disabled && styles.disabled,
-          ]}
-          testID={`ports-${portIdentifier}-${categoryKey}-none`}
-        >
-          <Text
-            style={[
-              styles.chipText,
-              selected === undefined && styles.chipTextSelected,
-            ]}
-          >
-            {t('portsConfiguration.none')}
-          </Text>
-        </Pressable>
-        {roles.map(role => {
-          const available = serialRoleIsAvailable(snapshot, role.key);
-          const active = selected === role.key;
-          const roleDisabled = isRoleDisabled?.(role.key) === true;
-          return (
-            <Pressable
-              key={role.key}
-              disabled={disabled || !available || roleDisabled}
-              onPress={() => onSelect(role.key)}
-              accessibilityLabel={`${title}: ${t(roleLabelKey(role.key))}`}
-              accessibilityRole="radio"
-              accessibilityState={{
-                selected: active,
-                disabled: disabled || !available || roleDisabled,
-              }}
-              style={[
-                styles.chip,
-                active && styles.chipSelected,
-                (!available || disabled || roleDisabled) && styles.disabled,
-              ]}
-              testID={`ports-${portIdentifier}-role-${role.key}`}
-            >
-              <Text
-                style={[styles.chipText, active && styles.chipTextSelected]}
-              >
-                {t(roleLabelKey(role.key))}
-              </Text>
-              {!available ? (
-                <Text style={styles.unavailableText}>
-                  {t('portsConfiguration.notCompiled')}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* The shared chip group: one selection look, one set of a11y
+          semantics. NONE is a synthetic key mapped back to `undefined`
+          at the boundary so the screen's own contract is unchanged. */}
+      <ChoiceChips
+        accessibilityLabel={title}
+        selectedKey={selected ?? NONE_ROLE_KEY}
+        onSelect={key =>
+          onSelect(key === NONE_ROLE_KEY ? undefined : (key as SerialRoleKey))
+        }
+        disabled={disabled}
+        options={[
+          {
+            key: NONE_ROLE_KEY,
+            label: t('portsConfiguration.none'),
+            testID: `ports-${portIdentifier}-${categoryKey}-none`,
+          },
+          ...roles.map(role => {
+            const available = serialRoleIsAvailable(snapshot, role.key);
+            return {
+              key: role.key as string,
+              label: t(roleLabelKey(role.key)),
+              disabled: !available || isRoleDisabled?.(role.key) === true,
+              note: available ? undefined : t('portsConfiguration.notCompiled'),
+              testID: `ports-${portIdentifier}-role-${role.key}`,
+            };
+          }),
+        ]}
+      />
     </View>
   );
 }
@@ -268,39 +240,17 @@ function BaudSelector({
       <Text style={styles.baudLabel}>
         {t(`portsConfiguration.baud.${field}`)}
       </Text>
-      <View style={styles.chipWrap}>
-        {availableBaudIndexes(field, apiMinor).map(index => {
-          const selected = port[field] === index;
-          return (
-            <Pressable
-              key={index}
-              disabled={disabled}
-              onPress={() => onChange(index)}
-              accessibilityLabel={`${t(`portsConfiguration.baud.${field}`)}: ${
-                SERIAL_BAUD_RATES[index]
-              }`}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, disabled }}
-              style={[
-                styles.baudChip,
-                selected && styles.chipSelected,
-                disabled && styles.disabled,
-              ]}
-              testID={`ports-${port.identifier}-${field}-${index}`}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  styles.ltr,
-                  selected && styles.chipTextSelected,
-                ]}
-              >
-                {SERIAL_BAUD_RATES[index]}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <ChoiceChips
+        accessibilityLabel={t(`portsConfiguration.baud.${field}`)}
+        selectedKey={String(port[field])}
+        onSelect={key => onChange(Number(key))}
+        disabled={disabled}
+        options={availableBaudIndexes(field, apiMinor).map(index => ({
+          key: String(index),
+          label: String(SERIAL_BAUD_RATES[index]),
+          testID: `ports-${port.identifier}-${field}-${index}`,
+        }))}
+      />
     </View>
   );
 }
@@ -361,7 +311,13 @@ function PortCard({
         }`}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        style={styles.portHeader}
+        style={state => {
+          const { pressed, hovered } = readInteraction(state);
+          return [
+            styles.portHeader,
+            (hovered || pressed) && styles.portHeaderActive,
+          ];
+        }}
         testID={`ports-card-toggle-${port.identifier}`}
       >
         <View>
@@ -378,11 +334,18 @@ function PortCard({
               {t('portsConfiguration.activeRoleCount', { count: roles.length })}
             </Text>
           </View>
-          <Text style={styles.expandText}>
-            {expanded
-              ? t('portsConfiguration.collapsePort')
-              : t('portsConfiguration.editPort')}
-          </Text>
+          <View style={styles.expandRow}>
+            <Icon
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.accentStrong}
+            />
+            <Text style={styles.expandText}>
+              {expanded
+                ? t('portsConfiguration.collapsePort')
+                : t('portsConfiguration.editPort')}
+            </Text>
+          </View>
         </View>
       </Pressable>
       {roles.length > 0 ? (
@@ -754,14 +717,12 @@ export default function PortsScreen({
           </Text>
         </View>
 
-        <View style={styles.warningCard}>
-          <Text style={styles.warningTitle}>
-            {t('portsConfiguration.warningTitle')}
-          </Text>
-          <Text style={styles.warningText}>
-            {t('portsConfiguration.warningBody')}
-          </Text>
-        </View>
+        <NoticeBox
+          variant="warning"
+          title={t('portsConfiguration.warningTitle')}
+        >
+          {t('portsConfiguration.warningBody')}
+        </NoticeBox>
 
         {phase === 'IDLE' ? (
           <Text style={styles.stateText}>
@@ -776,17 +737,13 @@ export default function PortsScreen({
         {loadMessage !== undefined ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>{loadMessage}</Text>
-            <Pressable
-              style={styles.secondaryButton}
-              accessibilityRole="button"
-              accessibilityLabel={t('portsConfiguration.reload')}
+            <Button
+              label={t('portsConfiguration.reload')}
               onPress={reloadNow}
+              variant="secondary"
+              icon="refresh-cw"
               testID="ports-retry-load"
-            >
-              <Text style={styles.secondaryButtonText}>
-                {t('portsConfiguration.reload')}
-              </Text>
-            </Pressable>
+            />
           </View>
         ) : null}
 
@@ -844,27 +801,22 @@ export default function PortsScreen({
                 </Text>
               </View>
               {onOpenGps !== undefined ? (
-                <Pressable
+                <Button
+                  label={t('portsConfiguration.openGps')}
                   onPress={onOpenGps}
-                  style={styles.secondaryButton}
-                  accessibilityRole="button"
+                  variant="secondary"
+                  icon="satellite"
                   testID="ports-open-gps"
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {t('portsConfiguration.openGps')}
-                  </Text>
-                </Pressable>
+                />
               ) : null}
             </View>
 
             {snapshot.vtxTableAvailable === true &&
             snapshot.vtxTableConfigured === false &&
             draft.some(port => hasSerialRole(port, 'VTX_MSP')) ? (
-              <View style={styles.noticeCard} testID="ports-vtx-table-warning">
-                <Text style={styles.noticeText}>
-                  {t('portsConfiguration.vtxTableMissing')}
-                </Text>
-              </View>
+              <NoticeBox variant="info" testID="ports-vtx-table-warning">
+                {t('portsConfiguration.vtxTableMissing')}
+              </NoticeBox>
             ) : null}
 
             {issues.length > 0 ? (
@@ -936,64 +888,40 @@ export default function PortsScreen({
             ) : null}
 
             <View style={styles.actions}>
-              <Pressable
-                disabled={controlsDisabled || !dirty}
-                accessibilityRole="button"
-                accessibilityLabel={t('portsConfiguration.reset')}
-                accessibilityState={{
-                  disabled: controlsDisabled || !dirty,
-                }}
+              <Button
+                label={t('portsConfiguration.reset')}
                 onPress={() => {
                   setDraft(original?.ports ?? []);
                   setSaveOutcome(undefined);
                 }}
-                style={[
-                  styles.secondaryButton,
-                  (controlsDisabled || !dirty) && styles.disabled,
-                ]}
+                variant="secondary"
+                icon="rotate-ccw"
+                disabled={controlsDisabled || !dirty}
                 testID="ports-reset"
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {t('portsConfiguration.reset')}
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={controlsDisabled}
-                accessibilityRole="button"
-                accessibilityLabel={t('portsConfiguration.reload')}
-                accessibilityState={{ disabled: controlsDisabled }}
+              />
+              <Button
+                label={t('portsConfiguration.reload')}
                 onPress={requestReload}
-                style={[
-                  styles.secondaryButton,
-                  controlsDisabled && styles.disabled,
-                ]}
+                variant="secondary"
+                icon="refresh-cw"
+                disabled={controlsDisabled}
                 testID="ports-reload"
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {t('portsConfiguration.reload')}
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={controlsDisabled || !dirty || issues.length > 0}
-                accessibilityRole="button"
-                accessibilityLabel={t('portsConfiguration.saveAndReboot')}
-                accessibilityState={{
-                  disabled: controlsDisabled || !dirty || issues.length > 0,
-                }}
-                onPress={handleSave}
-                style={[
-                  styles.saveButton,
-                  (controlsDisabled || !dirty || issues.length > 0) &&
-                    styles.disabled,
-                ]}
-                testID="ports-save"
-              >
-                <Text style={styles.saveButtonText}>
-                  {phase === 'SAVING'
+              />
+              <Button
+                label={
+                  phase === 'SAVING'
                     ? t('portsConfiguration.saving')
-                    : t('portsConfiguration.saveAndReboot')}
-                </Text>
-              </Pressable>
+                    : t('portsConfiguration.saveAndReboot')
+                }
+                onPress={handleSave}
+                variant="primary"
+                size="lg"
+                icon="save"
+                disabled={controlsDisabled || !dirty || issues.length > 0}
+                accessibilityLabel={t('portsConfiguration.saveAndReboot')}
+                style={styles.saveGrow}
+                testID="ports-save"
+              />
             </View>
           </>
         ) : null}
@@ -1045,7 +973,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
     width: '100%',
-    maxWidth: 1180,
+    // The real cap is applied inline from useContentEnvelope; no static
+    // fallback so the envelope logic is the only authority.
     alignSelf: 'center',
   },
   hero: { alignItems: 'flex-end', gap: spacing.xs },
@@ -1067,26 +996,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  warningCard: {
-    backgroundColor: '#FFF4D8',
-    borderColor: colors.warning,
-    borderWidth: 1,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    gap: spacing.xs,
-  },
-  warningTitle: {
-    ...typography.sectionTitle,
-    color: colors.warning,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  warningText: {
-    ...typography.body,
-    color: colors.textPrimary,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
   stateText: {
     ...typography.body,
     color: colors.textSecondary,
@@ -1095,7 +1004,7 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   errorCard: {
-    backgroundColor: '#FFF0F1',
+    backgroundColor: colors.errorSoft,
     borderWidth: 1,
     borderColor: colors.error,
     borderRadius: radii.md,
@@ -1156,19 +1065,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  noticeCard: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  noticeText: {
-    ...typography.body,
-    color: colors.info,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
   validationCard: {
-    backgroundColor: '#FFF4D8',
+    backgroundColor: colors.warningSoft,
     borderWidth: 1,
     borderColor: colors.warning,
     borderRadius: radii.md,
@@ -1200,7 +1098,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md,
+    borderRadius: radii.sm,
   },
+  portHeaderActive: { backgroundColor: colors.surfaceHover },
   portHeaderStatus: { alignItems: 'flex-start', gap: spacing.xs },
   portName: {
     ...typography.title,
@@ -1224,8 +1124,13 @@ const styles = StyleSheet.create({
     color: colors.accentStrong,
     writingDirection: 'rtl',
   },
+  expandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   expandText: {
-    ...typography.caption,
+    ...typography.label,
     color: colors.accentStrong,
     writingDirection: 'rtl',
   },
@@ -1283,50 +1188,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    minHeight: MIN_TOUCH_TARGET,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  chipSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
-  },
-  chipText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  chipTextSelected: { color: colors.accentStrong, fontWeight: '800' },
-  unavailableText: {
-    fontSize: 9,
-    lineHeight: 12,
-    color: colors.textMuted,
-    writingDirection: 'rtl',
-  },
   baudSection: { gap: spacing.xs, paddingTop: spacing.xs },
   baudLabel: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: 'right',
     writingDirection: 'rtl',
-  },
-  baudChip: {
-    minHeight: 36,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
   },
   ltr: { writingDirection: 'ltr' },
   disabled: { opacity: 0.42 },
@@ -1337,7 +1204,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
   },
-  outcomeDanger: { backgroundColor: '#FFF0F1', borderColor: colors.error },
+  outcomeDanger: { backgroundColor: colors.errorSoft, borderColor: colors.error },
   outcomeText: {
     ...typography.body,
     color: colors.success,
@@ -1350,34 +1217,5 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.sm,
   },
-  secondaryButton: {
-    minHeight: MIN_TOUCH_TARGET,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    ...typography.sectionTitle,
-    color: colors.accentStrong,
-    writingDirection: 'rtl',
-  },
-  saveButton: {
-    flexGrow: 1,
-    minHeight: 52,
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    ...typography.sectionTitle,
-    color: colors.accentText,
-    writingDirection: 'rtl',
-  },
+  saveGrow: { flexGrow: 1 },
 });
